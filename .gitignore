@@ -54,7 +54,3 @@ wheels/
 .installed.cfg
 *.egg
 .pytest_cache/
-
-# Test results
-TEST_RESULTS_SUMMARY.md
-FINAL_TEST_RESULTS.md

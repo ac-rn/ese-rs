@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ese-parser"
-version = "0.1.1"
+version = "0.1.2"
 description = "Fast ESE database parser with Rust backend"
 readme = "README.md"
 authors = [
@@ -25,6 +25,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Rust",
     "Topic :: Database",
     "Topic :: Software Development :: Libraries :: Python Modules",

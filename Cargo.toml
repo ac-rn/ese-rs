@@ -1,6 +1,6 @@
 [package]
 name = "ese-rs"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 authors = ["Claude Sonnet 4.5 (LOL no way im doin this by myself)"]
 description = "High-performance Microsoft ESE (Extensible Storage Engine) database parser"
