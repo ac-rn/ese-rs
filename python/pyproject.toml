@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ese-parser"
-version = "0.1.2"
+version = "0.1.3"
 description = "Fast ESE database parser with Rust backend"
 readme = "README.md"
 authors = [
@@ -41,5 +41,5 @@ Documentation = "https://github.com/ac-rn/ese-rs/blob/main/README.md"
 manifest-path = "../Cargo.toml"
 # Build with the python feature enabled
 features = ["python"]
-# Module name
+# Module name must match the #[pymodule] name in Rust
 module-name = "ese_parser"
