@@ -1,0 +1,14 @@
+# Development dependencies for Python bindings
+
+# Build tool
+maturin>=1.0,<2.0
+
+# Testing
+pytest>=7.0
+pytest-cov>=4.0
+
+# Type checking
+mypy>=1.0
+
+# Linting
+ruff>=0.1.0

@@ -1,0 +1,5 @@
+# Include Python package files
+include README.md
+include LICENSE-MIT
+include LICENSE-APACHE
+recursive-include ese_parser *.py *.pyi py.typed

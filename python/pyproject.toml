@@ -1,0 +1,44 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "ese-parser"
+version = "0.1.0"
+description = "Fast ESE database parser with Rust backend"
+authors = [
+    {name = "ESE-RS Contributors"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT OR Apache-2.0"}
+keywords = ["ese", "database", "parser", "forensics", "edb", "mdb"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/ac-rn/ese-rs"
+Repository = "https://github.com/ac-rn/ese-rs"
+Documentation = "https://github.com/ac-rn/ese-rs/blob/main/README.md"
+
+[tool.maturin]
+# Path to the Rust project root (parent directory)
+manifest-path = "../Cargo.toml"
+# Build with the python feature enabled
+features = ["python"]
+# Module name
+module-name = "ese_parser"
