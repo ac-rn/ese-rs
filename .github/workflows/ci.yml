@@ -103,8 +103,9 @@ jobs:
         
       - name: Build Python package
         run: |
-          cd python
-          maturin develop --release
+          python -m pip install --upgrade pip
+          maturin build --release --out dist --manifest-path Cargo.toml --features python
+          pip install --force-reinstall dist/*.whl
           
       - name: Run Python tests
         run: |
