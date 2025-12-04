@@ -228,7 +228,7 @@ pub const MIN_DATABASE_SIZE: usize = 8192;
 /// Helper function to determine if database uses large page format.
 #[inline]
 pub fn is_large_page_format(version: u32, revision: u32, page_size: u32) -> bool {
-    version == ESE_VERSION_WIN7 
-        && revision >= ESE_REVISION_LARGE_PAGE 
+    version == ESE_VERSION_WIN7
+        && revision >= ESE_REVISION_LARGE_PAGE
         && page_size > LARGE_PAGE_THRESHOLD
 }

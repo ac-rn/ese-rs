@@ -5,7 +5,7 @@ use crate::error::{EseError, Result};
 use zerocopy::{AsBytes, FromBytes, FromZeroes};
 
 /// Data definition header for all entries.
-#[derive(Debug, Clone, Copy, AsBytes, FromBytes, FromZeroes)]
+#[derive(Debug, Clone, Copy, AsBytes, FromBytes, FromZeroes, Default)]
 #[repr(C, packed)]
 pub struct DataDefinitionHeader {
     pub last_fixed_size: u8,
@@ -25,7 +25,7 @@ impl DataDefinitionHeader {
         }
         DataDefinitionHeader::ref_from_prefix(data).ok_or(EseError::InvalidDataDefinition)
     }
-    
+
     /// Parses a data definition header leniently (for data record parsing).
     /// Like Python's Structure class, we use defaults (0) for missing fields.
     /// This allows parsing of malformed records that Python handles.
@@ -38,16 +38,6 @@ impl DataDefinitionHeader {
         }
         // Use defaults if parsing fails (like Python's =0 defaults)
         Self::default()
-    }
-    
-    /// Creates a header with default values (all zeros)
-    /// This matches Python's behavior when fields are missing
-    pub fn default() -> Self {
-        DataDefinitionHeader {
-            last_fixed_size: 0,
-            last_variable_data_type: 0,
-            variable_size_offset: 0,
-        }
     }
 }
 
@@ -135,8 +125,8 @@ impl CatalogDataDefinitionEntry {
             return Err(EseError::InvalidCatalogEntry);
         }
 
-        let fixed = CatalogFixed::ref_from_prefix(&data[offset..])
-            .ok_or(EseError::InvalidCatalogEntry)?;
+        let fixed =
+            CatalogFixed::ref_from_prefix(&data[offset..]).ok_or(EseError::InvalidCatalogEntry)?;
         offset += std::mem::size_of::<CatalogFixed>();
 
         let entry_type = CatalogType::from_u16(fixed.entry_type)
@@ -259,10 +249,8 @@ impl CatalogDataDefinitionEntry {
             return Err(EseError::InvalidCatalogEntry);
         }
 
-        let item_len = u16::from_le_bytes([
-            entry_data[var_offset],
-            entry_data[var_offset + 1],
-        ]) as usize;
+        let item_len =
+            u16::from_le_bytes([entry_data[var_offset], entry_data[var_offset + 1]]) as usize;
 
         let name_offset = var_offset + (2 * num_entries as usize);
         if entry_data.len() < name_offset + item_len {

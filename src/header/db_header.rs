@@ -178,7 +178,7 @@ mod tests {
     fn test_invalid_signature() {
         let mut data = vec![0u8; 1024];
         data[4..8].copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-        
+
         let result = DbHeader::from_bytes(&data);
         assert!(result.is_err());
         assert!(matches!(result, Err(EseError::InvalidSignature(_))));
@@ -188,9 +188,9 @@ mod tests {
     fn test_valid_signature() {
         let mut data = vec![0u8; 1024];
         data[4..8].copy_from_slice(&DB_HEADER_SIGNATURE);
-        data[8..12].copy_from_slice(&0x620u32.to_le_bytes());  // version
+        data[8..12].copy_from_slice(&0x620u32.to_le_bytes()); // version
         data[236..240].copy_from_slice(&8192u32.to_le_bytes()); // page_size (offset 236)
-        
+
         let result = DbHeader::from_bytes(&data);
         assert!(result.is_ok());
         let header = result.unwrap();

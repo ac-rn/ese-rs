@@ -79,7 +79,7 @@ impl LeafEntry {
             // Check if we have enough data for the declared key size
             let available_for_key = data.len().saturating_sub(offset);
             let actual_key_size = std::cmp::min(local_page_key_size as usize, available_for_key);
-            
+
             if actual_key_size > 0 {
                 let local_page_key = data[offset..offset + actual_key_size].to_vec();
                 offset += actual_key_size;
@@ -132,8 +132,8 @@ mod tests {
     fn test_leaf_entry_without_common() {
         let mut data = vec![];
         data.extend_from_slice(&5u16.to_le_bytes()); // local key size
-        data.extend_from_slice(b"ABCDE");             // local key
-        data.extend_from_slice(b"ENTRYDATA");         // entry data
+        data.extend_from_slice(b"ABCDE"); // local key
+        data.extend_from_slice(b"ENTRYDATA"); // entry data
 
         let entry = LeafEntry::parse(0, &data).unwrap();
         assert_eq!(entry.common_page_key_size, None);
@@ -146,9 +146,9 @@ mod tests {
     fn test_leaf_entry_with_common() {
         let mut data = vec![];
         data.extend_from_slice(&10u16.to_le_bytes()); // common key size
-        data.extend_from_slice(&5u16.to_le_bytes());  // local key size
-        data.extend_from_slice(b"ABCDE");              // local key
-        data.extend_from_slice(b"ENTRYDATA");          // entry data
+        data.extend_from_slice(&5u16.to_le_bytes()); // local key size
+        data.extend_from_slice(b"ABCDE"); // local key
+        data.extend_from_slice(b"ENTRYDATA"); // entry data
 
         let entry = LeafEntry::parse(tag_flags::COMMON, &data).unwrap();
         assert_eq!(entry.common_page_key_size, Some(10));
@@ -160,8 +160,8 @@ mod tests {
     #[test]
     fn test_leaf_entry_zero_length_key() {
         let mut data = vec![];
-        data.extend_from_slice(&0u16.to_le_bytes());  // local key size = 0
-        data.extend_from_slice(b"ENTRYDATA");          // entry data
+        data.extend_from_slice(&0u16.to_le_bytes()); // local key size = 0
+        data.extend_from_slice(b"ENTRYDATA"); // entry data
 
         let entry = LeafEntry::parse(0, &data).unwrap();
         assert_eq!(entry.common_page_key_size, None);
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn test_leaf_entry_minimal() {
         let mut data = vec![];
-        data.extend_from_slice(&0u16.to_le_bytes());  // local key size = 0
+        data.extend_from_slice(&0u16.to_le_bytes()); // local key size = 0
 
         let entry = LeafEntry::parse(0, &data).unwrap();
         assert_eq!(entry.common_page_key_size, None);
@@ -185,8 +185,8 @@ mod tests {
     #[test]
     fn test_leaf_entry_empty_entry_data() {
         let mut data = vec![];
-        data.extend_from_slice(&3u16.to_le_bytes());  // local key size
-        data.extend_from_slice(b"KEY");                // local key (no entry data)
+        data.extend_from_slice(&3u16.to_le_bytes()); // local key size
+        data.extend_from_slice(b"KEY"); // local key (no entry data)
 
         let entry = LeafEntry::parse(0, &data).unwrap();
         assert_eq!(entry.common_page_key_size, None);

@@ -1,8 +1,10 @@
 //! Catalog parser for extracting table metadata.
 
-use crate::catalog::entry::{CatalogDataDefinitionEntry, CatalogEntryDetails, DataDefinitionHeader};
+use crate::catalog::entry::{
+    CatalogDataDefinitionEntry, CatalogEntryDetails, DataDefinitionHeader,
+};
 use crate::catalog::table_info::{ColumnInfo, IndexInfo, LongValueInfo, TableInfo};
-use crate::constants::{page_flags, is_large_page_format};
+use crate::constants::{is_large_page_format, page_flags};
 use crate::error::{EseError, Result};
 use crate::page::{BranchEntry, LeafEntry, Page};
 use indexmap::IndexMap;
@@ -36,15 +38,32 @@ impl<'a> CatalogParser<'a> {
         let mut tables = IndexMap::new();
         // Map from object ID to table name for column assignment
         let mut objid_to_table: IndexMap<u32, Vec<u8>> = IndexMap::new();
-        
-        // Store pending columns/indexes/longvalues that reference tables not yet seen
-        let mut pending_entries: Vec<(u32, Vec<u8>, CatalogDataDefinitionEntry, CatalogEntryDetails)> = Vec::new();
 
-        self.parse_catalog_page(page_num, &mut tables, &mut objid_to_table, &mut pending_entries)?;
-        
+        // Store pending columns/indexes/longvalues that reference tables not yet seen
+        let mut pending_entries: Vec<(
+            u32,
+            Vec<u8>,
+            CatalogDataDefinitionEntry,
+            CatalogEntryDetails,
+        )> = Vec::new();
+
+        self.parse_catalog_page(
+            page_num,
+            &mut tables,
+            &mut objid_to_table,
+            &mut pending_entries,
+        )?;
+
         // Second pass: process pending entries now that all tables are registered
         for (father_id, item_name, catalog_entry, details) in pending_entries {
-            self.assign_entry_to_table(father_id, item_name, catalog_entry, details, &mut tables, &objid_to_table)?;
+            self.assign_entry_to_table(
+                father_id,
+                item_name,
+                catalog_entry,
+                details,
+                &mut tables,
+                &objid_to_table,
+            )?;
         }
 
         Ok(tables)
@@ -56,7 +75,12 @@ impl<'a> CatalogParser<'a> {
         page_num: u32,
         tables: &mut IndexMap<Vec<u8>, TableInfo>,
         objid_to_table: &mut IndexMap<u32, Vec<u8>>,
-        pending_entries: &mut Vec<(u32, Vec<u8>, CatalogDataDefinitionEntry, CatalogEntryDetails)>,
+        pending_entries: &mut Vec<(
+            u32,
+            Vec<u8>,
+            CatalogDataDefinitionEntry,
+            CatalogEntryDetails,
+        )>,
     ) -> Result<()> {
         let page = (self.get_page_fn)(page_num)?;
         let extractor = page.tag_extractor(self.version, self.revision, self.page_size);
@@ -65,7 +89,7 @@ impl<'a> CatalogParser<'a> {
         // PASS 1: Process ALL leaf entries on this page FIRST
         // PASS 2: Then recurse to branch children
         // This matches Python's parseCatalog() logic
-        
+
         for tag_num in 0..extractor.num_tags() {
             // For large pages (>8KB), we need to use extract_tag_owned to get data with flags cleared
             let (flags, data_vec);
@@ -89,7 +113,7 @@ impl<'a> CatalogParser<'a> {
                 flags = result.0;
                 result.1
             };
-            
+
             // Skip empty tags
             if data.is_empty() {
                 continue;
@@ -98,7 +122,7 @@ impl<'a> CatalogParser<'a> {
             if page.common().page_flags & page_flags::LEAF != 0 {
                 // Leaf page - check what type before parsing
                 let page_flags_val = page.common().page_flags;
-                
+
                 // Skip special page types (matching Python behavior)
                 if page_flags_val & page_flags::SPACE_TREE != 0 {
                     // Space tree page - skip for catalog parsing
@@ -110,14 +134,19 @@ impl<'a> CatalogParser<'a> {
                     // Long value page - skip for catalog parsing
                     continue;
                 }
-                
+
                 // Regular catalog leaf entry
                 // Try to parse as leaf entry - if it fails, it might be metadata, skip it
                 match LeafEntry::parse(flags, data) {
                     Ok(leaf_entry) => {
                         // Process ALL entries, even with empty entry_data
                         // Empty entry_data can be valid (e.g., tables with only inherited columns)
-                        if let Err(e) = self.process_catalog_entry(&leaf_entry.entry_data, tables, objid_to_table, pending_entries) {
+                        if let Err(e) = self.process_catalog_entry(
+                            &leaf_entry.entry_data,
+                            tables,
+                            objid_to_table,
+                            pending_entries,
+                        ) {
                             // For large pages, catalog entry parsing might fail due to format differences
                             // Log but don't fail the entire parse
                             if self.page_size > 8192 {
@@ -135,7 +164,7 @@ impl<'a> CatalogParser<'a> {
                 }
             }
         }
-        
+
         // PASS 2: Now process branches and recurse (matching Python's second loop)
         for tag_num in 0..extractor.num_tags() {
             let (flags, data_vec);
@@ -157,16 +186,21 @@ impl<'a> CatalogParser<'a> {
                     Err(_) => continue,
                 }
             };
-            
+
             if data.is_empty() {
                 continue;
             }
-            
+
             // Only process branches if this is a branch page
             if page.common().page_flags & page_flags::LEAF == 0 {
                 // Try to parse as branch entry and recurse
                 if let Ok(branch_entry) = BranchEntry::parse(flags, data) {
-                    self.parse_catalog_page(branch_entry.child_page_number, tables, objid_to_table, pending_entries)?;
+                    self.parse_catalog_page(
+                        branch_entry.child_page_number,
+                        tables,
+                        objid_to_table,
+                        pending_entries,
+                    )?;
                 }
             }
         }
@@ -180,7 +214,12 @@ impl<'a> CatalogParser<'a> {
         entry_data: &[u8],
         tables: &mut IndexMap<Vec<u8>, TableInfo>,
         objid_to_table: &mut IndexMap<u32, Vec<u8>>,
-        pending_entries: &mut Vec<(u32, Vec<u8>, CatalogDataDefinitionEntry, CatalogEntryDetails)>,
+        pending_entries: &mut Vec<(
+            u32,
+            Vec<u8>,
+            CatalogDataDefinitionEntry,
+            CatalogEntryDetails,
+        )>,
     ) -> Result<()> {
         // Empty entry data might be valid - e.g., tables with only inherited columns
         // Try to process it, but return Ok if it's truly empty
@@ -189,18 +228,17 @@ impl<'a> CatalogParser<'a> {
             // TODO: investigate if we need special handling
             return Ok(());
         }
-        
+
         // Check minimum size for header
         if entry_data.len() < DataDefinitionHeader::SIZE {
             // Not enough data for even the header - skip it
             return Ok(());
         }
-        
-        // Parse the data definition header  
+
+        // Parse the data definition header
         let _header = DataDefinitionHeader::from_bytes(entry_data)?;
-        let catalog_entry = CatalogDataDefinitionEntry::parse(
-            &entry_data[DataDefinitionHeader::SIZE..],
-        )?;
+        let catalog_entry =
+            CatalogDataDefinitionEntry::parse(&entry_data[DataDefinitionHeader::SIZE..])?;
         let item_name = CatalogDataDefinitionEntry::extract_item_name(entry_data)?;
 
         match catalog_entry.details {
@@ -208,18 +246,15 @@ impl<'a> CatalogParser<'a> {
                 father_data_page_number,
                 space_usage,
             } => {
-                let table_info = TableInfo::new(
-                    item_name.clone(),
-                    father_data_page_number,
-                    space_usage,
-                );
+                let table_info =
+                    TableInfo::new(item_name.clone(), father_data_page_number, space_usage);
                 // Map this table's identifier to its name for column assignment
                 objid_to_table.insert(catalog_entry.identifier, item_name.clone());
                 tables.insert(item_name, table_info);
             }
 
-            CatalogEntryDetails::Column { .. } 
-            | CatalogEntryDetails::Index { .. } 
+            CatalogEntryDetails::Column { .. }
+            | CatalogEntryDetails::Index { .. }
             | CatalogEntryDetails::LongValue { .. } => {
                 // Store for second pass - table might not be registered yet
                 pending_entries.push((
@@ -233,7 +268,7 @@ impl<'a> CatalogParser<'a> {
 
         Ok(())
     }
-    
+
     /// Assigns a catalog entry to its table (used in second pass)
     fn assign_entry_to_table(
         &self,

@@ -2,7 +2,7 @@
 
 use crate::catalog::entry::DataDefinitionHeader;
 use crate::catalog::table_info::{ColumnInfo, TableInfo};
-use crate::constants::{ColumnType, is_large_page_format, tagged_data_flags};
+use crate::constants::{is_large_page_format, tagged_data_flags, ColumnType};
 use crate::error::{EseError, Result};
 use crate::header::DbHeader;
 use crate::types::ColumnValue;
@@ -32,7 +32,7 @@ impl<'a> RecordParser<'a> {
     /// 1. Fixed-size data (identifier <= 127)
     /// 2. Variable-size data (127 < identifier <= 255)
     /// 3. Tagged data (identifier > 255)
-    /// 
+    ///
     /// Like Python's lenient parsing, we try to extract what we can
     /// and use NULL for columns we can't parse.
     pub fn parse_record(&self) -> Result<IndexMap<Vec<u8>, ColumnValue>> {
@@ -55,19 +55,25 @@ impl<'a> RecordParser<'a> {
             // Be lenient like Python - if parsing any column fails, just use NULL
             let value = if col_info.identifier <= dd_header.last_fixed_size as u32 {
                 // Fixed-size column
-                self.parse_fixed_column(&mut fixed_offset, col_info).unwrap_or(ColumnValue::Null)
+                self.parse_fixed_column(&mut fixed_offset, col_info)
+                    .unwrap_or(ColumnValue::Null)
             } else if col_info.identifier > 127
                 && col_info.identifier <= dd_header.last_variable_data_type as u32
             {
                 // Variable-size column
-                self.parse_variable_column(&dd_header, col_info).unwrap_or(ColumnValue::Null)
+                self.parse_variable_column(&dd_header, col_info)
+                    .unwrap_or(ColumnValue::Null)
             } else if col_info.identifier > 255 {
                 // Tagged column (lazy parse tagged items)
                 if tagged_items.is_none() {
                     // Even if parsing tagged items fails, just use empty map
-                    tagged_items = Some(self.parse_tagged_items(&dd_header).unwrap_or_else(|_| IndexMap::new()));
+                    tagged_items = Some(
+                        self.parse_tagged_items(&dd_header)
+                            .unwrap_or_else(|_| IndexMap::new()),
+                    );
                 }
-                self.parse_tagged_column(col_info, tagged_items.as_ref().unwrap()).unwrap_or(ColumnValue::Null)
+                self.parse_tagged_column(col_info, tagged_items.as_ref().unwrap())
+                    .unwrap_or(ColumnValue::Null)
             } else {
                 ColumnValue::Null
             };
@@ -85,14 +91,14 @@ impl<'a> RecordParser<'a> {
         col_info: &ColumnInfo,
     ) -> Result<ColumnValue> {
         let size = col_info.space_usage as usize;
-        
+
         // Check if we have enough data
         if *fixed_offset + size > self.tag_data.len() {
             // Not enough data - column is NULL or not present
-            *fixed_offset += size;  // Still advance offset to stay aligned
+            *fixed_offset += size; // Still advance offset to stay aligned
             return Ok(ColumnValue::Null);
         }
-        
+
         let data = &self.tag_data[*fixed_offset..*fixed_offset + size];
         *fixed_offset += size;
 
@@ -123,7 +129,8 @@ impl<'a> RecordParser<'a> {
             return Ok(ColumnValue::Null);
         }
 
-        let item_len_raw = self.tag_data
+        let item_len_raw = self
+            .tag_data
             .get(offset_pos..offset_pos + 2)
             .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
             .map(u16::from_le_bytes)
@@ -142,7 +149,8 @@ impl<'a> RecordParser<'a> {
         // Calculate previous item length for offset calculation
         let prev_item_len = if index > 0 {
             let prev_offset_pos = var_offset + (index - 1) * 2;
-            let prev_len = self.tag_data
+            let prev_len = self
+                .tag_data
                 .get(prev_offset_pos..prev_offset_pos + 2)
                 .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
                 .map(u16::from_le_bytes)
@@ -200,7 +208,7 @@ impl<'a> RecordParser<'a> {
             0
         };
         let var_offset = dd_header.variable_size_offset as usize;
-        
+
         let variable_data_bytes_processed = {
             // Calculate total variable data size
             if num_var_entries == 0 {
@@ -210,7 +218,8 @@ impl<'a> RecordParser<'a> {
                 if self.tag_data.len() < last_offset_pos + 2 {
                     0
                 } else {
-                    let last_len = self.tag_data
+                    let last_len = self
+                        .tag_data
                         .get(last_offset_pos..last_offset_pos + 2)
                         .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
                         .map(u16::from_le_bytes)
@@ -220,7 +229,8 @@ impl<'a> RecordParser<'a> {
             }
         };
 
-        let tagged_start = var_offset + num_var_entries as usize * 2 + variable_data_bytes_processed;
+        let tagged_start =
+            var_offset + num_var_entries as usize * 2 + variable_data_bytes_processed;
 
         if tagged_start >= self.tag_data.len() {
             return Ok(IndexMap::new());
@@ -233,15 +243,16 @@ impl<'a> RecordParser<'a> {
         let flags_present = is_large_page_format(
             self.db_header.version(),
             self.db_header.file_format_revision(),
-            self.db_header.page_size()
+            self.db_header.page_size(),
         );
 
         // Read tagged item headers
         let mut tagged_headers = Vec::new();
-        
+
         // Calculate first data offset to know when to stop reading headers
         let first_data_offset = if index + 4 <= self.tag_data.len() {
-            let first_offset_raw = self.tag_data
+            let first_offset_raw = self
+                .tag_data
                 .get(index + 2..index + 4)
                 .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
                 .map(u16::from_le_bytes)
@@ -251,24 +262,26 @@ impl<'a> RecordParser<'a> {
         } else {
             self.tag_data.len()
         };
-        
+
         loop {
             if index + 4 > self.tag_data.len() {
                 break;
             }
-            
+
             if index >= first_data_offset {
                 break;
             }
 
-            let identifier = self.tag_data
+            let identifier = self
+                .tag_data
                 .get(index..index + 2)
                 .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
                 .map(u16::from_le_bytes)
                 .unwrap_or(0) as u32;
             index += 2;
 
-            let offset_raw = self.tag_data
+            let offset_raw = self
+                .tag_data
                 .get(index..index + 2)
                 .and_then(|bytes| <[u8; 2]>::try_from(bytes).ok())
                 .map(u16::from_le_bytes)
@@ -297,7 +310,7 @@ impl<'a> RecordParser<'a> {
             if offset > next_offset {
                 continue;
             }
-            
+
             let size = next_offset - offset;
             let data_start = tagged_start + offset;
 

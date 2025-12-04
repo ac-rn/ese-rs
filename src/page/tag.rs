@@ -3,7 +3,7 @@
 //! Tags are stored at the end of each page and point to data within the page.
 //! This module provides zero-copy extraction of tag data.
 
-use crate::constants::{PAGE_HEADER_TAG_OFFSET, is_large_page_format};
+use crate::constants::{is_large_page_format, PAGE_HEADER_TAG_OFFSET};
 use crate::error::{EseError, Result};
 
 /// Extracts tags from page data without copying.
@@ -35,7 +35,10 @@ impl<'a> TagExtractor<'a> {
         let num_tags = if page_data.len() >= 40 {
             // For all formats, the tag count is at offset 34-35 in the page
             // (after 8-byte or 4+4 byte checksums, this lands in the common header)
-            u16::from_le_bytes([page_data[PAGE_HEADER_TAG_OFFSET], page_data[PAGE_HEADER_TAG_OFFSET + 1]])
+            u16::from_le_bytes([
+                page_data[PAGE_HEADER_TAG_OFFSET],
+                page_data[PAGE_HEADER_TAG_OFFSET + 1],
+            ])
         } else {
             0
         };
@@ -85,55 +88,56 @@ impl<'a> TagExtractor<'a> {
         let tag_bytes = &self.page_data[tag_offset..tag_offset + 4];
 
         // Parse tag descriptor based on version
-        let (value_size, page_flags, value_offset) = if is_large_page_format(self.version, self.revision, self.page_size) {
-            // New format for large pages (Win7+, revision >= 17, page > 8KB)
-            let size_raw = u16::from_le_bytes([tag_bytes[0], tag_bytes[1]]);
-            let offset_raw = u16::from_le_bytes([tag_bytes[2], tag_bytes[3]]);
+        let (value_size, page_flags, value_offset) =
+            if is_large_page_format(self.version, self.revision, self.page_size) {
+                // New format for large pages (Win7+, revision >= 17, page > 8KB)
+                let size_raw = u16::from_le_bytes([tag_bytes[0], tag_bytes[1]]);
+                let offset_raw = u16::from_le_bytes([tag_bytes[2], tag_bytes[3]]);
 
-            let value_size = (size_raw & 0x7fff) as usize;
-            let value_offset = (offset_raw & 0x7fff) as usize;
+                let value_size = (size_raw & 0x7fff) as usize;
+                let value_offset = (offset_raw & 0x7fff) as usize;
 
-            // For new format, flags are embedded in the data itself
-            // We need to extract and clear them
-            let data_start = self.header_len + value_offset;
-            if data_start + value_size > self.page_data.len() {
-                return Err(EseError::TagOffsetOutOfBounds {
-                    offset: value_offset,
-                    size: value_size,
-                    page_size: self.page_data.len(),
-                });
-            }
+                // For new format, flags are embedded in the data itself
+                // We need to extract and clear them
+                let data_start = self.header_len + value_offset;
+                if data_start + value_size > self.page_data.len() {
+                    return Err(EseError::TagOffsetOutOfBounds {
+                        offset: value_offset,
+                        size: value_size,
+                        page_size: self.page_data.len(),
+                    });
+                }
 
-            // Flags are in bits 5-7 of the second byte
-            let page_flags = if value_size > 1 {
-                (self.page_data[data_start + 1] >> 5) & 0x07
+                // Flags are in bits 5-7 of the second byte
+                let page_flags = if value_size > 1 {
+                    (self.page_data[data_start + 1] >> 5) & 0x07
+                } else {
+                    0
+                };
+
+                // Extract data and clear the flag bits
+                let mut data = self.page_data[data_start..data_start + value_size].to_vec();
+                if data.len() > 1 {
+                    data[1] &= 0x1f; // Clear bits 5-7
+                }
+
+                // SAFETY: We're returning a reference to modified data, but we need to
+                // return &'a [u8]. For now, we'll handle this by returning the original
+                // data and document that flags need to be cleared by the caller.
+                // TODO: Consider a better approach that doesn't require allocation.
+
+                (value_size, page_flags, value_offset)
             } else {
-                0
+                // Legacy format
+                let size_raw = u16::from_le_bytes([tag_bytes[0], tag_bytes[1]]);
+                let offset_flags_raw = u16::from_le_bytes([tag_bytes[2], tag_bytes[3]]);
+
+                let value_size = (size_raw & 0x1fff) as usize;
+                let page_flags = ((offset_flags_raw & 0xe000) >> 13) as u8;
+                let value_offset = (offset_flags_raw & 0x1fff) as usize;
+
+                (value_size, page_flags, value_offset)
             };
-
-            // Extract data and clear the flag bits
-            let mut data = self.page_data[data_start..data_start + value_size].to_vec();
-            if data.len() > 1 {
-                data[1] &= 0x1f; // Clear bits 5-7
-            }
-
-            // SAFETY: We're returning a reference to modified data, but we need to
-            // return &'a [u8]. For now, we'll handle this by returning the original
-            // data and document that flags need to be cleared by the caller.
-            // TODO: Consider a better approach that doesn't require allocation.
-            
-            (value_size, page_flags, value_offset)
-        } else {
-            // Legacy format
-            let size_raw = u16::from_le_bytes([tag_bytes[0], tag_bytes[1]]);
-            let offset_flags_raw = u16::from_le_bytes([tag_bytes[2], tag_bytes[3]]);
-
-            let value_size = (size_raw & 0x1fff) as usize;
-            let page_flags = ((offset_flags_raw & 0xe000) >> 13) as u8;
-            let value_offset = (offset_flags_raw & 0x1fff) as usize;
-
-            (value_size, page_flags, value_offset)
-        };
 
         // Extract the data slice
         let data_start = self.header_len + value_offset;
@@ -243,17 +247,17 @@ mod tests {
 
     fn create_test_page(num_tags: u16) -> Vec<u8> {
         let mut page = vec![0u8; 8192];
-        
+
         // Mock header (40 bytes for Win7 format)
         let header_len = 40;
-        
+
         // Set first_available_page_tag in header (at offset 34)
         page[34..36].copy_from_slice(&num_tags.to_le_bytes());
-        
+
         // Add some tag data in the middle of the page
         let data_start = header_len + 100;
         page[data_start..data_start + 10].copy_from_slice(b"TESTDATA12");
-        
+
         // Add tag descriptors at the end
         let tag_array_start = page.len() - (num_tags as usize * 4);
         if num_tags > 0 {
@@ -261,7 +265,7 @@ mod tests {
             page[tag_array_start..tag_array_start + 2].copy_from_slice(&10u16.to_le_bytes());
             page[tag_array_start + 2..tag_array_start + 4].copy_from_slice(&100u16.to_le_bytes());
         }
-        
+
         page
     }
 
@@ -276,7 +280,7 @@ mod tests {
     fn test_extract_tag() {
         let page = create_test_page(1);
         let extractor = TagExtractor::new(&page, 40, 0x620, 0x11, 8192);
-        
+
         let (flags, data) = extractor.extract_tag(0).unwrap();
         assert_eq!(flags, 0);
         assert_eq!(data, b"TESTDATA12");
@@ -286,7 +290,7 @@ mod tests {
     fn test_invalid_tag_number() {
         let page = create_test_page(1);
         let extractor = TagExtractor::new(&page, 40, 0x620, 0x11, 8192);
-        
+
         let result = extractor.extract_tag(5);
         assert!(matches!(result, Err(EseError::InvalidTagNumber(5))));
     }

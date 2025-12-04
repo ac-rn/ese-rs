@@ -34,14 +34,14 @@ pub fn decode_string(data: &[u8], codepage: u32) -> Result<String, crate::error:
     use encoding_rs::WINDOWS_1252;
 
     let encoding = match codepage {
-        1200 => encoding_rs::UTF_16LE,   // Unicode (UTF-16LE)
+        1200 => encoding_rs::UTF_16LE,      // Unicode (UTF-16LE)
         20127 => encoding_rs::WINDOWS_1252, // ASCII (treat as Windows-1252)
-        1252 => WINDOWS_1252,             // Western European
+        1252 => WINDOWS_1252,               // Western European
         _ => return Err(crate::error::EseError::UnknownCodepage(codepage)),
     };
 
     let (decoded, _, had_errors) = encoding.decode(data);
-    
+
     if had_errors {
         // Log a warning but still return the decoded string
         #[cfg(feature = "logging")]

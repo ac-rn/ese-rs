@@ -78,7 +78,7 @@ impl BranchEntry {
         let local_page_key = if local_page_key_size > 0 {
             let available_for_key = data.len().saturating_sub(offset);
             let actual_key_size = std::cmp::min(local_page_key_size as usize, available_for_key);
-            
+
             if actual_key_size > 0 {
                 let key = data[offset..offset + actual_key_size].to_vec();
                 offset += actual_key_size;
@@ -125,7 +125,7 @@ mod tests {
     fn test_branch_entry_without_common() {
         let mut data = vec![];
         data.extend_from_slice(&5u16.to_le_bytes()); // local key size
-        data.extend_from_slice(b"ABCDE");             // local key
+        data.extend_from_slice(b"ABCDE"); // local key
         data.extend_from_slice(&42u32.to_le_bytes()); // child page number
 
         let entry = BranchEntry::parse(0, &data).unwrap();
@@ -139,9 +139,9 @@ mod tests {
     fn test_branch_entry_with_common() {
         let mut data = vec![];
         data.extend_from_slice(&10u16.to_le_bytes()); // common key size
-        data.extend_from_slice(&5u16.to_le_bytes());  // local key size
-        data.extend_from_slice(b"ABCDE");              // local key
-        data.extend_from_slice(&42u32.to_le_bytes());  // child page number
+        data.extend_from_slice(&5u16.to_le_bytes()); // local key size
+        data.extend_from_slice(b"ABCDE"); // local key
+        data.extend_from_slice(&42u32.to_le_bytes()); // child page number
 
         let entry = BranchEntry::parse(tag_flags::COMMON, &data).unwrap();
         assert_eq!(entry.common_page_key_size, Some(10));

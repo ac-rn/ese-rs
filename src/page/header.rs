@@ -80,7 +80,7 @@ impl PageHeader {
     /// Parses a Windows 2003 SP0 format page header.
     fn parse_legacy_2003(data: &[u8]) -> Result<(Self, usize)> {
         const MIN_SIZE: usize = 4 + 4 + std::mem::size_of::<PageHeaderCommon>();
-        
+
         if data.len() < MIN_SIZE {
             return Err(EseError::PageDataTooShort {
                 expected: MIN_SIZE,
@@ -90,9 +90,9 @@ impl PageHeader {
 
         let checksum = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
         let page_number = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-        
-        let common = PageHeaderCommon::ref_from_prefix(&data[8..])
-            .ok_or(EseError::InvalidHeader)?;
+
+        let common =
+            PageHeaderCommon::ref_from_prefix(&data[8..]).ok_or(EseError::InvalidHeader)?;
 
         Ok((
             PageHeader::Legacy2003 {
@@ -107,7 +107,7 @@ impl PageHeader {
     /// Parses a Windows Vista format page header.
     fn parse_vista(data: &[u8]) -> Result<(Self, usize)> {
         const MIN_SIZE: usize = 4 + 4 + std::mem::size_of::<PageHeaderCommon>();
-        
+
         if data.len() < MIN_SIZE {
             return Err(EseError::PageDataTooShort {
                 expected: MIN_SIZE,
@@ -117,9 +117,9 @@ impl PageHeader {
 
         let checksum = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
         let ecc_checksum = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-        
-        let common = PageHeaderCommon::ref_from_prefix(&data[8..])
-            .ok_or(EseError::InvalidHeader)?;
+
+        let common =
+            PageHeaderCommon::ref_from_prefix(&data[8..]).ok_or(EseError::InvalidHeader)?;
 
         Ok((
             PageHeader::Vista {
@@ -134,11 +134,11 @@ impl PageHeader {
     /// Parses a Windows 7+ format page header.
     fn parse_win7(data: &[u8], page_size: u32) -> Result<(Self, usize)> {
         let mut offset = 0;
-        
+
         const CHECKSUM_SIZE: usize = 8;
         const COMMON_SIZE: usize = std::mem::size_of::<PageHeaderCommon>();
         let min_size = CHECKSUM_SIZE + COMMON_SIZE;
-        
+
         if data.len() < min_size {
             return Err(EseError::PageDataTooShort {
                 expected: min_size,
@@ -147,13 +147,12 @@ impl PageHeader {
         }
 
         let checksum = u64::from_le_bytes([
-            data[0], data[1], data[2], data[3], 
-            data[4], data[5], data[6], data[7],
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
         ]);
         offset += CHECKSUM_SIZE;
 
-        let common = PageHeaderCommon::ref_from_prefix(&data[offset..])
-            .ok_or(EseError::InvalidHeader)?;
+        let common =
+            PageHeaderCommon::ref_from_prefix(&data[offset..]).ok_or(EseError::InvalidHeader)?;
         offset += COMMON_SIZE;
 
         // Check if we have extended header (for pages > 8KB)
@@ -165,7 +164,7 @@ impl PageHeader {
                     actual: data.len(),
                 });
             }
-            
+
             let ext = PageHeaderExtended::ref_from_prefix(&data[offset..])
                 .ok_or(EseError::InvalidHeader)?;
             offset += EXTENDED_SIZE;
@@ -235,7 +234,7 @@ mod tests {
         data[0..4].copy_from_slice(&0x12345678u32.to_le_bytes());
         // Set page number
         data[4..8].copy_from_slice(&42u32.to_le_bytes());
-        
+
         let (header, size) = PageHeader::parse(&data, 0x619, 0, 8192).unwrap();
         assert!(matches!(header, PageHeader::Legacy2003 { .. }));
         assert_eq!(size, 40);
@@ -246,7 +245,7 @@ mod tests {
         let mut data = vec![0u8; 256];
         data[0..4].copy_from_slice(&0x12345678u32.to_le_bytes());
         data[4..8].copy_from_slice(&0x87654321u32.to_le_bytes());
-        
+
         // Vista format: version 0x620, revision between 0x0b and 0x10
         let (header, size) = PageHeader::parse(&data, 0x620, 0x0b, 8192).unwrap();
         assert!(matches!(header, PageHeader::Vista { .. }));
@@ -257,7 +256,7 @@ mod tests {
     fn test_parse_win7() {
         let mut data = vec![0u8; 256];
         data[0..8].copy_from_slice(&0x123456789abcdef0u64.to_le_bytes());
-        
+
         let (header, size) = PageHeader::parse(&data, 0x620, 0x11, 8192).unwrap();
         assert!(matches!(header, PageHeader::Win7 { extended: None, .. }));
         assert_eq!(size, 40);
@@ -267,9 +266,15 @@ mod tests {
     fn test_parse_win7_extended() {
         let mut data = vec![0u8; 256];
         data[0..8].copy_from_slice(&0x123456789abcdef0u64.to_le_bytes());
-        
+
         let (header, size) = PageHeader::parse(&data, 0x620, 0x11, 16384).unwrap();
-        assert!(matches!(header, PageHeader::Win7 { extended: Some(_), .. }));
+        assert!(matches!(
+            header,
+            PageHeader::Win7 {
+                extended: Some(_),
+                ..
+            }
+        ));
         assert_eq!(size, 80);
     }
 }

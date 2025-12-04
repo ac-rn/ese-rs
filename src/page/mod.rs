@@ -1,20 +1,20 @@
 //! Page-level structures and parsing.
 
-pub mod header;
-pub mod tag;
-pub mod root;
 pub mod branch;
-pub mod leaf;
-pub mod space_tree;
+pub mod header;
 pub mod index;
+pub mod leaf;
+pub mod root;
+pub mod space_tree;
+pub mod tag;
 
-pub use header::{PageHeader, PageHeaderCommon};
-pub use tag::TagExtractor;
-pub use root::RootHeader;
 pub use branch::{BranchEntry, BranchHeader};
-pub use leaf::{LeafEntry, LeafHeader};
-pub use space_tree::{SpaceTreeEntry, SpaceTreeHeader};
+pub use header::{PageHeader, PageHeaderCommon};
 pub use index::IndexEntry;
+pub use leaf::{LeafEntry, LeafHeader};
+pub use root::RootHeader;
+pub use space_tree::{SpaceTreeEntry, SpaceTreeHeader};
+pub use tag::TagExtractor;
 
 use crate::error::Result;
 
@@ -32,7 +32,7 @@ impl<'a> Page<'a> {
     /// Parses a page from raw data.
     pub fn parse(data: &'a [u8], version: u32, revision: u32, page_size: u32) -> Result<Self> {
         let (header, header_len) = PageHeader::parse(data, version, revision, page_size)?;
-        
+
         Ok(Page {
             data,
             header,

@@ -4,7 +4,7 @@ use crate::catalog::table_info::TableInfo;
 use crate::constants::is_large_page_format;
 use crate::database::Database;
 use crate::error::Result;
-use crate::page::{LeafEntry, Page, BranchEntry};
+use crate::page::{BranchEntry, LeafEntry, Page};
 use crate::record::RecordParser;
 use crate::types::ColumnValue;
 use indexmap::IndexMap;
@@ -29,7 +29,7 @@ impl<'a> TableCursor<'a> {
         // This matches Python's openTable logic (lines 724-741 in ese.py)
         let mut page_num = table_info.father_data_page_number;
         let mut page = db.get_page(page_num)?;
-        
+
         // Keep following tag 1 until we reach a leaf page
         while !page.is_leaf() {
             let extractor = page.tag_extractor(
@@ -37,13 +37,13 @@ impl<'a> TableCursor<'a> {
                 db.header().file_format_revision(),
                 db.page_size(),
             );
-            
+
             // Check if there are any tags
             if extractor.num_tags() <= 1 {
                 // No records, start with empty page
                 break;
             }
-            
+
             // Get tag 1 (Python uses range(1, FirstAvailablePageTag))
             let (flags, data) = extractor.extract_tag(1)?;
             let branch_entry = BranchEntry::parse(flags, data)?;
@@ -58,7 +58,6 @@ impl<'a> TableCursor<'a> {
             current_tag: 1, // Start at tag 1 (tag 0 is the header)
         })
     }
-
 
     /// Advances to the next row and returns the parsed record.
     ///
@@ -75,7 +74,7 @@ impl<'a> TableCursor<'a> {
     ///
     /// let db = Database::open("database.edb")?;
     /// let mut cursor = db.open_table(b"MyTable")?;
-    /// 
+    ///
     /// while let Some(record) = cursor.next_row()? {
     ///     for (column_name, value) in &record {
     ///         println!("{}: {}", String::from_utf8_lossy(column_name), value);
@@ -95,7 +94,7 @@ impl<'a> TableCursor<'a> {
             if self.current_tag >= page.common().first_available_page_tag {
                 // Move to next page via next_page_number link (like Python)
                 let next_page_num = page.common().next_page_number;
-                
+
                 if next_page_num == 0 {
                     // No more pages
                     return Ok(None);
@@ -120,7 +119,7 @@ impl<'a> TableCursor<'a> {
             let data: &[u8] = if is_large_page_format(
                 self.db.header().version(),
                 self.db.header().file_format_revision(),
-                self.db.page_size()
+                self.db.page_size(),
             ) {
                 match extractor.extract_tag_owned(self.current_tag) {
                     Ok(result) => {
@@ -145,12 +144,12 @@ impl<'a> TableCursor<'a> {
                     }
                 }
             };
-            
+
             self.current_tag += 1;
 
             // Verify this is a leaf page (sanity check)
             if !page.is_leaf() {
-                continue;  // Skip non-leaf pages instead of failing
+                continue; // Skip non-leaf pages instead of failing
             }
 
             // Skip non-table leaf entries
@@ -163,17 +162,18 @@ impl<'a> TableCursor<'a> {
                 Ok(entry) => entry,
                 Err(e) => {
                     #[cfg(feature = "logging")]
-                    log::debug!("Skipping unparseable leaf entry at tag {}: {}", self.current_tag - 1, e);
+                    log::debug!(
+                        "Skipping unparseable leaf entry at tag {}: {}",
+                        self.current_tag - 1,
+                        e
+                    );
                     continue;
                 }
             };
 
             // Parse the record - skip if it fails
-            let parser = RecordParser::new(
-                &leaf_entry.entry_data,
-                self.table_info,
-                self.db.header(),
-            );
+            let parser =
+                RecordParser::new(&leaf_entry.entry_data, self.table_info, self.db.header());
 
             match parser.parse_record() {
                 Ok(record) => {
@@ -186,7 +186,11 @@ impl<'a> TableCursor<'a> {
                 }
                 Err(e) => {
                     #[cfg(feature = "logging")]
-                    log::warn!("Failed to parse record at tag {}: {}", self.current_tag - 1, e);
+                    log::warn!(
+                        "Failed to parse record at tag {}: {}",
+                        self.current_tag - 1,
+                        e
+                    );
                     continue;
                 }
             }

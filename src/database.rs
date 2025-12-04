@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_database_header_size() {
-        // Just ensure the constant is correct
-        assert!(DbHeader::SIZE > 0);
+        // Verify the header size is reasonable
+        assert_eq!(DbHeader::SIZE, std::mem::size_of::<DbHeader>());
     }
 }

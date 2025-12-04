@@ -32,15 +32,15 @@
 //! # }
 //! ```
 
+pub mod catalog;
 pub mod constants;
+pub mod cursor;
+pub mod database;
 pub mod error;
-pub mod types;
 pub mod header;
 pub mod page;
-pub mod catalog;
 pub mod record;
-pub mod database;
-pub mod cursor;
+pub mod types;
 pub mod utils;
 
 // Python bindings (optional)
@@ -48,11 +48,11 @@ pub mod utils;
 pub mod python;
 
 // Re-export commonly used types
-pub use database::Database;
+pub use constants::{CatalogType, CodePage, ColumnType};
 pub use cursor::TableCursor;
+pub use database::Database;
 pub use error::{EseError, Result};
 pub use types::ColumnValue;
-pub use constants::{ColumnType, CatalogType, CodePage};
 
 // Python module initialization
 #[cfg(feature = "python")]
