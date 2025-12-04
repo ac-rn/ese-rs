@@ -27,6 +27,8 @@ jobs:
           args: --release --out dist --find-interpreter --manifest-path Cargo.toml --features python
           sccache: 'true'
           manylinux: auto
+        env:
+          PYO3_PYTHON: python3.13
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -50,6 +52,8 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter --manifest-path Cargo.toml --features python
           sccache: 'true'
+        env:
+          PYO3_PYTHON: python3.13
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -72,6 +76,8 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter --manifest-path Cargo.toml --features python
           sccache: 'true'
+        env:
+          PYO3_PYTHON: python3.13
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
