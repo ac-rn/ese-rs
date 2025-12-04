@@ -65,7 +65,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Documentation
 
 - [Python API Documentation](python/README.md)
-- [Rust API Documentation](https://docs.rs/ese-rs)
 - [Examples](examples/)
 
 ## Performance
@@ -75,8 +74,6 @@ Benchmark parsing 340,288+ records from 3 databases:
 - **Python (Impacket)**: 82.12 seconds
 - **Rust (ese-rs)**: 2.18 seconds
 - **Speedup**: 37.69x
-
-See [PERFORMANCE_BENCHMARK.md](PERFORMANCE_BENCHMARK.md) for details.
 
 ## Supported Database Types
 
@@ -90,10 +87,6 @@ See [PERFORMANCE_BENCHMARK.md](PERFORMANCE_BENCHMARK.md) for details.
 ## License
 
 Dual-licensed under MIT OR Apache-2.0.
-
-## Contributing
-
-Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Acknowledgments
 
