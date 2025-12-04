@@ -105,7 +105,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           maturin build --release --out dist --manifest-path Cargo.toml --features python
-          pip install --force-reinstall dist/*.whl
+      
+      - name: Install wheel (Unix)
+        if: runner.os != 'Windows'
+        run: pip install --force-reinstall dist/*.whl
+      
+      - name: Install wheel (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem -Path dist -Filter *.whl | Select-Object -First 1
+          pip install --force-reinstall $wheel.FullName
           
       - name: Run Python tests
         run: |
