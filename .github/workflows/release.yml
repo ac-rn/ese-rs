@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.13'
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -27,8 +27,6 @@ jobs:
           args: --release --out dist --find-interpreter --manifest-path Cargo.toml --features python
           sccache: 'true'
           manylinux: auto
-        env:
-          PYO3_PYTHON: python3.13
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -44,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.13'
           architecture: ${{ matrix.target }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -52,8 +50,6 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter --manifest-path Cargo.toml --features python
           sccache: 'true'
-        env:
-          PYO3_PYTHON: python3.13
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -69,15 +65,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.13'
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter --manifest-path Cargo.toml --features python
           sccache: 'true'
-        env:
-          PYO3_PYTHON: python3.13
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
