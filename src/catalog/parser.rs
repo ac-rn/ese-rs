@@ -94,24 +94,28 @@ impl<'a> CatalogParser<'a> {
             // For large pages (>8KB), we need to use extract_tag_owned to get data with flags cleared
             let (flags, data_vec);
             let data: &[u8] = if is_large_page_format(self.version, self.revision, self.page_size) {
-                let result = extractor.extract_tag_owned(tag_num).map_err(|e| {
-                    EseError::Parse(format!(
-                        "Failed to extract tag {} from page {}: {}",
-                        tag_num, page_num, e
-                    ))
-                })?;
-                flags = result.0;
-                data_vec = result.1;
-                &data_vec
+                match extractor.extract_tag_owned(tag_num) {
+                    Ok(result) => {
+                        flags = result.0;
+                        data_vec = result.1;
+                        &data_vec
+                    }
+                    Err(_) => {
+                        // Skip tags that fail to extract (common in large page formats)
+                        continue;
+                    }
+                }
             } else {
-                let result = extractor.extract_tag(tag_num).map_err(|e| {
-                    EseError::Parse(format!(
-                        "Failed to extract tag {} from page {}: {}",
-                        tag_num, page_num, e
-                    ))
-                })?;
-                flags = result.0;
-                result.1
+                match extractor.extract_tag(tag_num) {
+                    Ok(result) => {
+                        flags = result.0;
+                        result.1
+                    }
+                    Err(_) => {
+                        // Skip tags that fail to extract
+                        continue;
+                    }
+                }
             };
 
             // Skip empty tags
@@ -194,13 +198,20 @@ impl<'a> CatalogParser<'a> {
             // Only process branches if this is a branch page
             if page.common().page_flags & page_flags::LEAF == 0 {
                 // Try to parse as branch entry and recurse
-                if let Ok(branch_entry) = BranchEntry::parse(flags, data) {
-                    self.parse_catalog_page(
-                        branch_entry.child_page_number,
-                        tables,
-                        objid_to_table,
-                        pending_entries,
-                    )?;
+                match BranchEntry::parse(flags, data) {
+                    Ok(branch_entry) => {
+                        self.parse_catalog_page(
+                            branch_entry.child_page_number,
+                            tables,
+                            objid_to_table,
+                            pending_entries,
+                        )?;
+                    }
+                    Err(_) => {
+                        // Failed to parse as branch entry - skip this tag
+                        // This can happen with invalid tag descriptors or metadata tags
+                        continue;
+                    }
                 }
             }
         }

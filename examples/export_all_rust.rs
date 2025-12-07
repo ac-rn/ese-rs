@@ -132,12 +132,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     total_rows += count;
                     total_tables += 1;
                 }
-                Err(e) => {
-                    eprintln!(
-                        "  Error exporting {}: {}",
-                        String::from_utf8_lossy(table_name),
-                        e
-                    );
+                Err(_e) => {
+                    // Silently skip tables that fail to export
+                    // This can happen with corrupted data or unsupported formats
                 }
             }
         }

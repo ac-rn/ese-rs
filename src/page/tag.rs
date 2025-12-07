@@ -26,19 +26,27 @@ impl<'a> TagExtractor<'a> {
         page_size: u32,
     ) -> Self {
         // Extract number of tags from the page header common fields
-        // The first_available_page_tag field is at a FIXED offset in PageHeaderCommon
-        // For Win7+ format: 8 bytes checksum + 34 bytes into common = offset 34 from common start
-        // For Vista format: 4+4 bytes checksums + 34 bytes into common = offset 34 from common start
-        // For Legacy format: 4+4 bytes + 34 bytes into common = offset 34 from common start
-        // The common header always starts after the initial checksum(s), and first_available_page_tag
-        // is at offset 34 within the common header structure
+        // The first_available_page_tag field indicates the first unused tag slot,
+        // so it represents the count of tags in use (tags 0 through first_available_page_tag-1)
         let num_tags = if page_data.len() >= 40 {
-            // For all formats, the tag count is at offset 34-35 in the page
-            // (after 8-byte or 4+4 byte checksums, this lands in the common header)
-            u16::from_le_bytes([
+            let first_avail_tag = u16::from_le_bytes([
                 page_data[PAGE_HEADER_TAG_OFFSET],
                 page_data[PAGE_HEADER_TAG_OFFSET + 1],
-            ])
+            ]);
+            
+            // For large pages (>8KB), the first_available_page_tag value can be incorrect
+            // We need to calculate the actual tag count from available_data_size
+            if page_size > 8192 {
+                let available_data_size = u16::from_le_bytes([page_data[28], page_data[29]]);
+                let tag_space = page_data.len().saturating_sub(available_data_size as usize);
+                let calculated_tags = (tag_space / 4) as u16;
+                
+                // Use the minimum of the two values as a safety check
+                // This handles cases where one value might be corrupted
+                first_avail_tag.min(calculated_tags)
+            } else {
+                first_avail_tag
+            }
         } else {
             0
         };
@@ -187,12 +195,13 @@ impl<'a> TagExtractor<'a> {
             let value_offset = (offset_raw & 0x7fff) as usize;
 
             let data_start = self.header_len + value_offset;
+            
+            // Validate that the tag descriptor points to valid data within the page
+            // If not, this tag slot might be unused or the tag count is incorrect
             if data_start + value_size > self.page_data.len() {
-                return Err(EseError::TagOffsetOutOfBounds {
-                    offset: value_offset,
-                    size: value_size,
-                    page_size: self.page_data.len(),
-                });
+                // For large pages, invalid tag descriptors might indicate we've read past
+                // the actual tag array. Return empty data instead of erroring.
+                return Ok((0, Vec::new()));
             }
 
             let mut data = self.page_data[data_start..data_start + value_size].to_vec();

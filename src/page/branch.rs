@@ -108,6 +108,16 @@ impl BranchEntry {
             data[offset + 3],
         ]);
 
+        // Sanity check: page numbers should be reasonable
+        // Page 0 is invalid, and very large page numbers are likely corrupted
+        // Most ESE databases have < 100,000 pages
+        if child_page_number == 0 || child_page_number > 100_000 {
+            return Err(EseError::Parse(format!(
+                "Branch entry has invalid child page number: {} (likely corrupted data)",
+                child_page_number
+            )));
+        }
+
         Ok(BranchEntry {
             common_page_key_size,
             local_page_key_size,
