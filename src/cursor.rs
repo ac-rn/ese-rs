@@ -177,11 +177,6 @@ impl<'a> TableCursor<'a> {
 
             match parser.parse_record() {
                 Ok(record) => {
-                    // Skip rows where ALL values are null (empty records)
-                    let all_null = record.values().all(|v| v.is_null());
-                    if all_null {
-                        continue;
-                    }
                     return Ok(Some(record));
                 }
                 Err(e) => {

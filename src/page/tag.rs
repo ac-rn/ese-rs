@@ -164,6 +164,69 @@ impl<'a> TagExtractor<'a> {
         Ok((page_flags, tag_data))
     }
 
+    pub fn extract_tag_bounds(&self, tag_num: u16) -> Result<(u8, usize, usize)> {
+        if tag_num >= self.num_tags {
+            return Err(EseError::InvalidTagNumber(tag_num));
+        }
+
+        let tag_offset = self.page_data.len() - ((tag_num as usize + 1) * 4);
+        if tag_offset + 4 > self.page_data.len() {
+            return Err(EseError::PageDataTooShort {
+                expected: tag_offset + 4,
+                actual: self.page_data.len(),
+            });
+        }
+
+        let tag_bytes = &self.page_data[tag_offset..tag_offset + 4];
+
+        let (value_size, page_flags, value_offset) =
+            if is_large_page_format(self.version, self.revision, self.page_size) {
+                let size_raw = u16::from_le_bytes([tag_bytes[0], tag_bytes[1]]);
+                let offset_raw = u16::from_le_bytes([tag_bytes[2], tag_bytes[3]]);
+
+                let value_size = (size_raw & 0x7fff) as usize;
+                let value_offset = (offset_raw & 0x7fff) as usize;
+
+                let data_start = self.header_len + value_offset;
+                if data_start + value_size > self.page_data.len() {
+                    return Err(EseError::TagOffsetOutOfBounds {
+                        offset: value_offset,
+                        size: value_size,
+                        page_size: self.page_data.len(),
+                    });
+                }
+
+                let page_flags = if value_size > 1 {
+                    (self.page_data[data_start + 1] >> 5) & 0x07
+                } else {
+                    0
+                };
+
+                (value_size, page_flags, value_offset)
+            } else {
+                let size_raw = u16::from_le_bytes([tag_bytes[0], tag_bytes[1]]);
+                let offset_flags_raw = u16::from_le_bytes([tag_bytes[2], tag_bytes[3]]);
+
+                let value_size = (size_raw & 0x1fff) as usize;
+                let page_flags = ((offset_flags_raw & 0xe000) >> 13) as u8;
+                let value_offset = (offset_flags_raw & 0x1fff) as usize;
+
+                (value_size, page_flags, value_offset)
+            };
+
+        let data_start = self.header_len + value_offset;
+        let data_end = data_start + value_size;
+        if data_end > self.page_data.len() {
+            return Err(EseError::TagOffsetOutOfBounds {
+                offset: value_offset,
+                size: value_size,
+                page_size: self.page_data.len(),
+            });
+        }
+
+        Ok((page_flags, data_start, data_end))
+    }
+
     /// Extracts a tag and returns owned data with flags cleared (for new format).
     ///
     /// This is necessary for the new format where flags are embedded in the data.

@@ -180,7 +180,7 @@ impl<'a> RecordParser<'a> {
     ) -> Result<ColumnValue> {
         if let Some(item) = tagged_items.get(&col_info.identifier) {
             if item.flags & tagged_data_flags::COMPRESSED != 0 {
-                return Err(EseError::CompressedDataUnsupported);
+                return Ok(ColumnValue::Binary(item.data.clone()));
             }
 
             if item.flags & tagged_data_flags::MULTI_VALUE != 0 {

@@ -206,6 +206,86 @@ impl PyEseDatabase {
         Ok(())
     }
 
+    #[pyo3(signature = (needle=None, min_chars=6, max_hits=1000))]
+    fn carve_utf16le_strings(
+        &self,
+        py: Python,
+        needle: Option<String>,
+        min_chars: usize,
+        max_hits: usize,
+    ) -> PyResult<PyObject> {
+        let hits = self
+            .db
+            .carve_utf16le_strings(needle.as_deref(), min_chars, max_hits)?;
+
+        let out = PyList::empty_bound(py);
+        for h in hits {
+            let d = PyDict::new_bound(py);
+            d.set_item("page", h.page_number)?;
+            d.set_item("offset", h.offset_in_page)?;
+            d.set_item("slack_start", h.slack_start)?;
+            d.set_item("slack_end", h.slack_end)?;
+            d.set_item("region_kind", h.region_kind)?;
+            d.set_item("page_flags", h.page_flags)?;
+            d.set_item("page_type", h.page_type)?;
+            d.set_item("table", h.table)?;
+            d.set_item("text", h.text)?;
+            out.append(d)?;
+        }
+
+        Ok(out.into())
+    }
+
+    #[pyo3(signature = (scope, needle=None, min_chars=6, max_hits=1000))]
+    fn carve_utf16le_strings_scoped(
+        &self,
+        py: Python,
+        scope: &str,
+        needle: Option<String>,
+        min_chars: usize,
+        max_hits: usize,
+    ) -> PyResult<PyObject> {
+        use crate::database::CarveScope;
+
+        let scope = match scope {
+            "slack" => CarveScope::Slack,
+            "all" => CarveScope::All,
+            "tag_data" => CarveScope::TagData,
+            "lv_all" => CarveScope::LongValueAll,
+            "lv_slack" => CarveScope::LongValueSlack,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "Invalid scope: {} (expected: slack, all, tag_data, lv_all, lv_slack)",
+                    other
+                )))
+            }
+        };
+
+        let hits = self.db.carve_utf16le_strings_scoped(
+            scope,
+            needle.as_deref(),
+            min_chars,
+            max_hits,
+        )?;
+
+        let out = PyList::empty_bound(py);
+        for h in hits {
+            let d = PyDict::new_bound(py);
+            d.set_item("page", h.page_number)?;
+            d.set_item("offset", h.offset_in_page)?;
+            d.set_item("slack_start", h.slack_start)?;
+            d.set_item("slack_end", h.slack_end)?;
+            d.set_item("region_kind", h.region_kind)?;
+            d.set_item("page_flags", h.page_flags)?;
+            d.set_item("page_type", h.page_type)?;
+            d.set_item("table", h.table)?;
+            d.set_item("text", h.text)?;
+            out.append(d)?;
+        }
+
+        Ok(out.into())
+    }
+
     /// Export all tables to JSONL files in a directory.
     ///
     /// Args:

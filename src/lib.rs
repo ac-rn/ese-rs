@@ -51,6 +51,8 @@ pub mod python;
 pub use constants::{CatalogType, CodePage, ColumnType};
 pub use cursor::TableCursor;
 pub use database::Database;
+pub use database::CarvedString;
+pub use database::CarveScope;
 pub use error::{EseError, Result};
 pub use types::ColumnValue;
 
