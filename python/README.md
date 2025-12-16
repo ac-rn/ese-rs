@@ -43,6 +43,41 @@ for table in db.get_tables():
 records = db.read_table("MSysObjects")
 for record in records:
     print(record)
+
+## Forensic carving (UTF-16LE)
+
+When strings exist in the database file but do not appear in parsed table output (e.g., deleted records or page slack), you can scan for UTF-16LE strings directly.
+
+```python
+from ese_parser import EseDatabase
+
+db = EseDatabase("WebCacheV01.dat")
+
+# Scan unreferenced page slack
+hits = db.carve_utf16le_strings_scoped("slack", "hopto.org", min_chars=6, max_hits=50)
+for h in hits:
+    print(h)
+
+# Scan only tag-referenced regions (closest to "live" record bytes)
+hits = db.carve_utf16le_strings_scoped("tag_data", "hopto.org", min_chars=6, max_hits=50)
+```
+
+Supported scopes:
+
+- `"slack"`: gaps not referenced by any tag (page slack)
+- `"tag_data"`: only tag-referenced byte ranges
+- `"all"`: entire page bytes
+- `"lv_slack"`: slack but only on LONG_VALUE pages
+- `"lv_all"`: entire LONG_VALUE pages
+
+Each hit is returned as a dictionary with keys including:
+
+- `page`, `offset`
+- `slack_start`, `slack_end`
+- `region_kind`
+- `page_flags`, `page_type`
+- `table` (best-effort guess; may be null)
+- `text`
 ```
 
 

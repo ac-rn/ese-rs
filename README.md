@@ -9,6 +9,7 @@ High-performance Microsoft ESE (Extensible Storage Engine) database parser writt
 - 🐍 **Python bindings** via PyO3
 - 📦 **Zero-copy parsing** where possible
 - 🔧 **Cross-platform** (Windows, Linux, macOS)
+- 🔍 **Forensic carving** for recovering UTF-16LE strings from unreferenced page slack
 
 ## Installation
 
@@ -43,6 +44,12 @@ for table in db.get_tables():
 records = db.read_table("MSysObjects")
 for record in records:
     print(record)
+
+# Forensic carving (UTF-16LE)
+# Note: carved results may come from page slack and not correspond to live records.
+hits = db.carve_utf16le_strings_scoped("slack", "hopto.org", min_chars=6, max_hits=50)
+for h in hits:
+    print(h)
 ```
 
 ### Rust

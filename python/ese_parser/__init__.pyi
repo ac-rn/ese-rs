@@ -24,6 +24,23 @@ class EseDatabase:
             IOError: If the database cannot be opened or is invalid
         """
         ...
+
+    def carve_utf16le_strings(
+        self,
+        needle: Optional[str] = None,
+        min_chars: int = 6,
+        max_hits: int = 1000,
+    ) -> List[Dict[str, Any]]:
+        ...
+
+    def carve_utf16le_strings_scoped(
+        self,
+        scope: str,
+        needle: Optional[str] = None,
+        min_chars: int = 6,
+        max_hits: int = 1000,
+    ) -> List[Dict[str, Any]]:
+        ...
     
     @property
     def path(self) -> str:
