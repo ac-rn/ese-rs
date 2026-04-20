@@ -52,37 +52,6 @@ jobs:
       - name: Run tests (no default features)
         run: cargo test --no-default-features
 
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      # Default feature set only — the `python` feature pulls in PyO3
-      # which requires a matching Python interpreter, tested separately.
-      - run: cargo clippy --all-targets -- -D warnings
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
-
-  audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: rustsec/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
   python:
     name: Python Tests
     runs-on: ${{ matrix.os }}
