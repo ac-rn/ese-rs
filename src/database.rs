@@ -455,7 +455,13 @@ impl Database {
         if lv_key.len() < 4 {
             return Ok(Vec::new());
         }
-        let lid: [u8; 4] = [lv_key[0], lv_key[1], lv_key[2], lv_key[3]];
+        // The LID is stored little-endian in the tagged column data, but LV
+        // tree keys encode it big-endian so byte-wise comparison yields the
+        // same order as numeric comparison. Byte-swap before lookup —
+        // skipping this silently matches coincidentally equal byte patterns
+        // and reassembles chunks from the wrong LID ("junk" output).
+        let lid_value = u32::from_le_bytes([lv_key[0], lv_key[1], lv_key[2], lv_key[3]]);
+        let lid: [u8; 4] = lid_value.to_be_bytes();
 
         // Each table has at most one LV tree.
         let lv_info = match table_info.long_values.values().next() {
