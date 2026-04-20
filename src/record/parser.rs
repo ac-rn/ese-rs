@@ -179,6 +179,15 @@ impl<'a> RecordParser<'a> {
         tagged_items: &IndexMap<u32, TaggedItem>,
     ) -> Result<ColumnValue> {
         if let Some(item) = tagged_items.get(&col_info.identifier) {
+            // STORED flag (libesedb LONG_VALUE, 0x04): data is a long-value key
+            // (typically 4 bytes) that references the long-value tree — NOT the
+            // inline value. Resolution requires walking the LV tree; return the
+            // raw key so callers can look it up instead of mis-decoding it as
+            // inline text/binary.
+            if item.flags & tagged_data_flags::STORED != 0 {
+                return Ok(ColumnValue::LongValue(item.data.clone()));
+            }
+
             if item.flags & tagged_data_flags::COMPRESSED != 0 {
                 return Ok(ColumnValue::Binary(item.data.clone()));
             }

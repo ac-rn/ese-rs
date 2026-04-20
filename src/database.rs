@@ -6,7 +6,7 @@ use crate::constants::CATALOG_PAGE_NUMBER;
 use crate::cursor::TableCursor;
 use crate::error::{EseError, Result};
 use crate::header::DbHeader;
-use crate::page::Page;
+use crate::page::{BranchEntry, LeafEntry, Page};
 use indexmap::IndexMap;
 use memmap2::Mmap;
 use std::fs::File;
@@ -439,19 +439,169 @@ impl Database {
         None
     }
 
+    /// Resolves a long-value key to its inline bytes by walking the table's
+    /// long-value B-tree.
+    ///
+    /// `lv_key` is the 4-byte key found in a tagged record with the STORED
+    /// flag set. The LV tree stores two kinds of leaf entries per key:
+    /// - `lid[4]` — descriptor (8 bytes: reference count + total size)
+    /// - `lid[4] || offset[4-BE]` — chunk of data at that offset
+    ///
+    /// Chunks are reassembled in offset order. On any structural issue
+    /// (no LV tree, malformed pages, key not found) returns whatever was
+    /// collected — empty vec if nothing.
+    pub(crate) fn read_long_value(
+        &self,
+        table_info: &TableInfo,
+        lv_key: &[u8],
+    ) -> Result<Vec<u8>> {
+        if lv_key.len() < 4 {
+            return Ok(Vec::new());
+        }
+        let lid: [u8; 4] = [lv_key[0], lv_key[1], lv_key[2], lv_key[3]];
+
+        // Each table has at most one LV tree.
+        let lv_info = match table_info.long_values.values().next() {
+            Some(lv) => lv,
+            None => return Ok(Vec::new()),
+        };
+
+        // Descend to the leftmost leaf (tag 1 → leftmost child).
+        let mut page_num = lv_info.father_data_page_number;
+        let mut page = self.get_page(page_num)?;
+        let mut depth_guard = 0u32;
+        while !page.is_leaf() {
+            let extractor = page.tag_extractor(
+                self.header.version(),
+                self.header.file_format_revision(),
+                self.page_size,
+            );
+            if extractor.num_tags() <= 1 {
+                break;
+            }
+            let (flags, data) = match extractor.extract_tag(1) {
+                Ok(r) => r,
+                Err(_) => break,
+            };
+            let branch = match BranchEntry::parse(flags, data) {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+            page_num = branch.child_page_number;
+            page = self.get_page(page_num)?;
+            depth_guard += 1;
+            if depth_guard > 64 {
+                break;
+            }
+        }
+
+        // Walk leaf chain collecting chunks for our LID; stop once keys pass it.
+        let mut chunks: Vec<(u32, Vec<u8>)> = Vec::new();
+        let mut current = page_num;
+        let mut leaf_guard = 0u32;
+        let mut passed_lid = false;
+
+        while current != 0 && current <= self.total_pages && !passed_lid {
+            let p = match self.get_page(current) {
+                Ok(x) => x,
+                Err(_) => break,
+            };
+            if !p.is_leaf() {
+                break;
+            }
+
+            let extractor = p.tag_extractor(
+                self.header.version(),
+                self.header.file_format_revision(),
+                self.page_size,
+            );
+
+            // Tag 0 holds the common page key shared by entries with TAG_COMMON set.
+            let common_key: Vec<u8> = match extractor.extract_tag(0) {
+                Ok((_, data)) => data.to_vec(),
+                Err(_) => Vec::new(),
+            };
+
+            let num_tags = extractor.num_tags();
+            for tag_num in 1..num_tags {
+                let (flags, data) = match extractor.extract_tag(tag_num) {
+                    Ok(r) => r,
+                    Err(_) => continue,
+                };
+                let leaf = match LeafEntry::parse(flags, data) {
+                    Ok(le) => le,
+                    Err(_) => continue,
+                };
+
+                let common_size = leaf.common_page_key_size.unwrap_or(0) as usize;
+                let common_take = common_size.min(common_key.len());
+                let mut full_key =
+                    Vec::with_capacity(common_take + leaf.local_page_key.len());
+                full_key.extend_from_slice(&common_key[..common_take]);
+                full_key.extend_from_slice(&leaf.local_page_key);
+
+                if full_key.len() < 4 {
+                    continue;
+                }
+                match full_key[..4].cmp(&lid[..]) {
+                    std::cmp::Ordering::Less => continue,
+                    std::cmp::Ordering::Greater => {
+                        passed_lid = true;
+                        break;
+                    }
+                    std::cmp::Ordering::Equal => {}
+                }
+
+                // Chunk entries have a 4-byte BE offset suffix; descriptor entries have key length 4.
+                if full_key.len() >= 8 {
+                    let offset = u32::from_be_bytes([
+                        full_key[4],
+                        full_key[5],
+                        full_key[6],
+                        full_key[7],
+                    ]);
+                    chunks.push((offset, leaf.entry_data));
+                }
+                // full_key.len() == 4: descriptor; skip — total size is implicit from chunks.
+            }
+
+            let next = p.common().next_page_number;
+            if next == current {
+                break;
+            }
+            current = next;
+            leaf_guard += 1;
+            if leaf_guard > 100_000 {
+                break;
+            }
+        }
+
+        chunks.sort_by_key(|(o, _)| *o);
+        let mut out = Vec::new();
+        for (_, d) in chunks {
+            out.extend_from_slice(&d);
+        }
+        Ok(out)
+    }
+
     /// Gets page data by page number.
     ///
     /// Page numbers are 1-indexed (page 1 is the database header).
     /// This function returns a zero-copy slice into the memory-mapped file.
     pub(crate) fn get_page_data(&self, page_num: u32) -> Result<&[u8]> {
-        let offset = ((page_num + 1) * self.page_size) as usize;
-        let end = offset + self.page_size as usize;
+        let offset = (page_num as u64)
+            .checked_add(1)
+            .and_then(|n| n.checked_mul(self.page_size as u64))
+            .ok_or(EseError::InvalidPageNumber(page_num))?;
+        let end = offset
+            .checked_add(self.page_size as u64)
+            .ok_or(EseError::InvalidPageNumber(page_num))?;
 
-        if end > self.mmap.len() {
+        if end > self.mmap.len() as u64 {
             return Err(EseError::InvalidPageNumber(page_num));
         }
 
-        Ok(&self.mmap[offset..end])
+        Ok(&self.mmap[offset as usize..end as usize])
     }
 
     /// Gets a parsed page by page number.

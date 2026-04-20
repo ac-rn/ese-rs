@@ -1,12 +1,13 @@
 //! Table cursor for iterating over records.
 
 use crate::catalog::table_info::TableInfo;
-use crate::constants::is_large_page_format;
+use crate::constants::{is_large_page_format, ColumnType};
 use crate::database::Database;
 use crate::error::Result;
 use crate::page::{BranchEntry, LeafEntry, Page};
 use crate::record::RecordParser;
 use crate::types::ColumnValue;
+use crate::utils::decode_string;
 use indexmap::IndexMap;
 
 /// Cursor for iterating over records in a table.
@@ -176,7 +177,8 @@ impl<'a> TableCursor<'a> {
                 RecordParser::new(&leaf_entry.entry_data, self.table_info, self.db.header());
 
             match parser.parse_record() {
-                Ok(record) => {
+                Ok(mut record) => {
+                    self.resolve_long_values(&mut record);
                     return Ok(Some(record));
                 }
                 Err(e) => {
@@ -195,5 +197,51 @@ impl<'a> TableCursor<'a> {
     /// Returns a reference to the table information.
     pub fn table_info(&self) -> &TableInfo {
         self.table_info
+    }
+
+    /// Replaces `ColumnValue::LongValue(key)` entries with their resolved
+    /// contents from the table's long-value tree. Failures leave the raw
+    /// key in place so callers can still inspect it.
+    fn resolve_long_values(&self, record: &mut IndexMap<Vec<u8>, ColumnValue>) {
+        let keys: Vec<Vec<u8>> = record
+            .iter()
+            .filter_map(|(k, v)| match v {
+                ColumnValue::LongValue(_) => Some(k.clone()),
+                _ => None,
+            })
+            .collect();
+
+        for col_name in keys {
+            let lv_key = match record.get(&col_name) {
+                Some(ColumnValue::LongValue(k)) => k.clone(),
+                _ => continue,
+            };
+
+            let col_info = match self.table_info.columns.get(&col_name) {
+                Some(c) => c,
+                None => continue,
+            };
+
+            let data = match self.db.read_long_value(self.table_info, &lv_key) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            if data.is_empty() {
+                continue;
+            }
+
+            let resolved = match col_info.column_type {
+                ColumnType::LongText | ColumnType::Text => {
+                    let codepage = col_info.code_page.unwrap_or(1252);
+                    match decode_string(&data, codepage) {
+                        Ok(s) => ColumnValue::Text(s),
+                        Err(_) => ColumnValue::Binary(data),
+                    }
+                }
+                _ => ColumnValue::Binary(data),
+            };
+
+            record.insert(col_name, resolved);
+        }
     }
 }
