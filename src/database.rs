@@ -444,12 +444,13 @@ impl Database {
     ///
     /// `lv_key` is the 4-byte key found in a tagged record with the STORED
     /// flag set. The LV tree stores two kinds of leaf entries per key:
-    /// - `lid[4]` — descriptor (8 bytes: reference count + total size)
+    /// - `lid[4]` — descriptor: `ref_count[4-LE] || total_size[4-LE]`
     /// - `lid[4] || offset[4-BE]` — chunk of data at that offset
     ///
-    /// Chunks are reassembled in offset order. On any structural issue
-    /// (no LV tree, malformed pages, key not found) returns whatever was
-    /// collected — empty vec if nothing.
+    /// Chunks are reassembled in offset order. If the descriptor's total size
+    /// is present, the result is truncated/padded to match it. On structural
+    /// issues (no LV tree, malformed pages, key not found) returns whatever
+    /// was collected — empty vec if nothing.
     pub(crate) fn read_long_value(
         &self,
         table_info: &TableInfo,
@@ -466,10 +467,14 @@ impl Database {
             None => return Ok(Vec::new()),
         };
 
-        // Descend to the leftmost leaf (tag 1 → leftmost child).
+        // Descend to the leftmost leaf (tag 1 → leftmost child). A well-formed
+        // B-tree has depth ≤ log_fanout(total_pages); a malformed file can
+        // cycle, so track visited pages and stop if we revisit one.
         let mut page_num = lv_info.father_data_page_number;
         let mut page = self.get_page(page_num)?;
-        let mut depth_guard = 0u32;
+        let mut visited_branch: std::collections::HashSet<u32> =
+            std::collections::HashSet::new();
+        visited_branch.insert(page_num);
         while !page.is_leaf() {
             let extractor = page.tag_extractor(
                 self.header.version(),
@@ -487,21 +492,25 @@ impl Database {
                 Ok(b) => b,
                 Err(_) => break,
             };
-            page_num = branch.child_page_number;
-            page = self.get_page(page_num)?;
-            depth_guard += 1;
-            if depth_guard > 64 {
+            if !visited_branch.insert(branch.child_page_number) {
                 break;
             }
+            page_num = branch.child_page_number;
+            page = self.get_page(page_num)?;
         }
 
         // Walk leaf chain collecting chunks for our LID; stop once keys pass it.
         let mut chunks: Vec<(u32, Vec<u8>)> = Vec::new();
+        let mut total_size: Option<u32> = None;
         let mut current = page_num;
-        let mut leaf_guard = 0u32;
+        let mut visited_leaf: std::collections::HashSet<u32> =
+            std::collections::HashSet::new();
         let mut passed_lid = false;
 
         while current != 0 && current <= self.total_pages && !passed_lid {
+            if !visited_leaf.insert(current) {
+                break;
+            }
             let p = match self.get_page(current) {
                 Ok(x) => x,
                 Err(_) => break,
@@ -552,8 +561,8 @@ impl Database {
                     std::cmp::Ordering::Equal => {}
                 }
 
-                // Chunk entries have a 4-byte BE offset suffix; descriptor entries have key length 4.
                 if full_key.len() >= 8 {
+                    // Chunk: 4-byte BE offset suffix.
                     let offset = u32::from_be_bytes([
                         full_key[4],
                         full_key[5],
@@ -561,8 +570,15 @@ impl Database {
                         full_key[7],
                     ]);
                     chunks.push((offset, leaf.entry_data));
+                } else if leaf.entry_data.len() >= 8 {
+                    // Descriptor: ref_count[4-LE] || total_size[4-LE].
+                    total_size = Some(u32::from_le_bytes([
+                        leaf.entry_data[4],
+                        leaf.entry_data[5],
+                        leaf.entry_data[6],
+                        leaf.entry_data[7],
+                    ]));
                 }
-                // full_key.len() == 4: descriptor; skip — total size is implicit from chunks.
             }
 
             let next = p.common().next_page_number;
@@ -570,16 +586,15 @@ impl Database {
                 break;
             }
             current = next;
-            leaf_guard += 1;
-            if leaf_guard > 100_000 {
-                break;
-            }
         }
 
         chunks.sort_by_key(|(o, _)| *o);
         let mut out = Vec::new();
         for (_, d) in chunks {
             out.extend_from_slice(&d);
+        }
+        if let Some(n) = total_size {
+            out.truncate(n as usize);
         }
         Ok(out)
     }

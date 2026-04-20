@@ -200,8 +200,10 @@ impl<'a> TableCursor<'a> {
     }
 
     /// Replaces `ColumnValue::LongValue(key)` entries with their resolved
-    /// contents from the table's long-value tree. Failures leave the raw
-    /// key in place so callers can still inspect it.
+    /// contents from the table's long-value tree. Resolution always produces
+    /// a `Text` or `Binary` (possibly empty) so callers never see a raw LV
+    /// key — an unfound LID becomes empty data, not an opaque reference. Only
+    /// a hard read error (propagated from `get_page_data`) leaves the raw key.
     fn resolve_long_values(&self, record: &mut IndexMap<Vec<u8>, ColumnValue>) {
         let keys: Vec<Vec<u8>> = record
             .iter()
@@ -226,9 +228,6 @@ impl<'a> TableCursor<'a> {
                 Ok(d) => d,
                 Err(_) => continue,
             };
-            if data.is_empty() {
-                continue;
-            }
 
             let resolved = match col_info.column_type {
                 ColumnType::LongText | ColumnType::Text => {
