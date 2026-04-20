@@ -14,7 +14,7 @@
 //! ## Example
 //!
 //! ```no_run
-//! use ese_rs::Database;
+//! use ese_parser::Database;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Open an ESE database
@@ -50,9 +50,9 @@ pub mod python;
 // Re-export commonly used types
 pub use constants::{CatalogType, CodePage, ColumnType};
 pub use cursor::TableCursor;
-pub use database::Database;
-pub use database::CarvedString;
 pub use database::CarveScope;
+pub use database::CarvedString;
+pub use database::Database;
 pub use error::{EseError, Result};
 pub use types::ColumnValue;
 

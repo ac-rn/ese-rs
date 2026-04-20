@@ -5,7 +5,7 @@ use crate::catalog::entry::{
 };
 use crate::catalog::table_info::{ColumnInfo, IndexInfo, LongValueInfo, TableInfo};
 use crate::constants::{is_large_page_format, page_flags};
-use crate::error::{EseError, Result};
+use crate::error::Result;
 use crate::page::{BranchEntry, LeafEntry, Page};
 use indexmap::IndexMap;
 

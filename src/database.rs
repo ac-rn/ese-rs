@@ -63,10 +63,10 @@ impl Database {
     /// # Example
     ///
     /// ```no_run
-    /// use ese_rs::Database;
+    /// use ese_parser::Database;
     ///
     /// let db = Database::open("database.edb")?;
-    /// # Ok::<(), ese_rs::EseError>(())
+    /// # Ok::<(), ese_parser::EseError>(())
     /// ```
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path)?;
@@ -157,16 +157,16 @@ impl Database {
     /// # Example
     ///
     /// ```no_run
-    /// use ese_rs::Database;
+    /// use ese_parser::Database;
     ///
     /// let db = Database::open("database.edb")?;
     /// let mut cursor = db.open_table(b"MyTable")?;
     /// while let Some(record) = cursor.next_row()? {
     ///     println!("{:?}", record);
     /// }
-    /// # Ok::<(), ese_rs::EseError>(())
+    /// # Ok::<(), ese_parser::EseError>(())
     /// ```
-    pub fn open_table(&self, table_name: &[u8]) -> Result<TableCursor> {
+    pub fn open_table(&self, table_name: &[u8]) -> Result<TableCursor<'_>> {
         let table_info = self
             .tables
             .get(table_name)
@@ -451,11 +451,7 @@ impl Database {
     /// is present, the result is truncated/padded to match it. On structural
     /// issues (no LV tree, malformed pages, key not found) returns whatever
     /// was collected — empty vec if nothing.
-    pub(crate) fn read_long_value(
-        &self,
-        table_info: &TableInfo,
-        lv_key: &[u8],
-    ) -> Result<Vec<u8>> {
+    pub(crate) fn read_long_value(&self, table_info: &TableInfo, lv_key: &[u8]) -> Result<Vec<u8>> {
         if lv_key.len() < 4 {
             return Ok(Vec::new());
         }
@@ -472,8 +468,7 @@ impl Database {
         // cycle, so track visited pages and stop if we revisit one.
         let mut page_num = lv_info.father_data_page_number;
         let mut page = self.get_page(page_num)?;
-        let mut visited_branch: std::collections::HashSet<u32> =
-            std::collections::HashSet::new();
+        let mut visited_branch: std::collections::HashSet<u32> = std::collections::HashSet::new();
         visited_branch.insert(page_num);
         while !page.is_leaf() {
             let extractor = page.tag_extractor(
@@ -503,8 +498,7 @@ impl Database {
         let mut chunks: Vec<(u32, Vec<u8>)> = Vec::new();
         let mut total_size: Option<u32> = None;
         let mut current = page_num;
-        let mut visited_leaf: std::collections::HashSet<u32> =
-            std::collections::HashSet::new();
+        let mut visited_leaf: std::collections::HashSet<u32> = std::collections::HashSet::new();
         let mut passed_lid = false;
 
         while current != 0 && current <= self.total_pages && !passed_lid {
@@ -544,8 +538,7 @@ impl Database {
 
                 let common_size = leaf.common_page_key_size.unwrap_or(0) as usize;
                 let common_take = common_size.min(common_key.len());
-                let mut full_key =
-                    Vec::with_capacity(common_take + leaf.local_page_key.len());
+                let mut full_key = Vec::with_capacity(common_take + leaf.local_page_key.len());
                 full_key.extend_from_slice(&common_key[..common_take]);
                 full_key.extend_from_slice(&leaf.local_page_key);
 
@@ -563,12 +556,8 @@ impl Database {
 
                 if full_key.len() >= 8 {
                     // Chunk: 4-byte BE offset suffix.
-                    let offset = u32::from_be_bytes([
-                        full_key[4],
-                        full_key[5],
-                        full_key[6],
-                        full_key[7],
-                    ]);
+                    let offset =
+                        u32::from_be_bytes([full_key[4], full_key[5], full_key[6], full_key[7]]);
                     chunks.push((offset, leaf.entry_data));
                 } else if leaf.entry_data.len() >= 8 {
                     // Descriptor: ref_count[4-LE] || total_size[4-LE].
@@ -620,7 +609,7 @@ impl Database {
     }
 
     /// Gets a parsed page by page number.
-    pub(crate) fn get_page(&self, page_num: u32) -> Result<Page> {
+    pub(crate) fn get_page(&self, page_num: u32) -> Result<Page<'_>> {
         let data = self.get_page_data(page_num)?;
         Page::parse(
             data,
@@ -631,6 +620,7 @@ impl Database {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn carve_utf16le_from_range(
     page_number: u32,
     page_data: &[u8],
@@ -656,7 +646,7 @@ fn carve_utf16le_from_range(
         }
 
         // Keep word alignment (UTF-16LE).
-        if i % 2 != 0 {
+        if !i.is_multiple_of(2) {
             i += 1;
             continue;
         }

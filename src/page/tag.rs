@@ -33,14 +33,14 @@ impl<'a> TagExtractor<'a> {
                 page_data[PAGE_HEADER_TAG_OFFSET],
                 page_data[PAGE_HEADER_TAG_OFFSET + 1],
             ]);
-            
+
             // For large pages (>8KB), the first_available_page_tag value can be incorrect
             // We need to calculate the actual tag count from available_data_size
             if page_size > 8192 {
                 let available_data_size = u16::from_le_bytes([page_data[28], page_data[29]]);
                 let tag_space = page_data.len().saturating_sub(available_data_size as usize);
                 let calculated_tags = (tag_space / 4) as u16;
-                
+
                 // Use the minimum of the two values as a safety check
                 // This handles cases where one value might be corrupted
                 first_avail_tag.min(calculated_tags)
@@ -258,7 +258,7 @@ impl<'a> TagExtractor<'a> {
             let value_offset = (offset_raw & 0x7fff) as usize;
 
             let data_start = self.header_len + value_offset;
-            
+
             // Validate that the tag descriptor points to valid data within the page
             // If not, this tag slot might be unused or the tag count is incorrect
             if data_start + value_size > self.page_data.len() {

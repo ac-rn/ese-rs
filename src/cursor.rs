@@ -71,7 +71,7 @@ impl<'a> TableCursor<'a> {
     /// # Example
     ///
     /// ```no_run
-    /// use ese_rs::Database;
+    /// use ese_parser::Database;
     ///
     /// let db = Database::open("database.edb")?;
     /// let mut cursor = db.open_table(b"MyTable")?;
@@ -81,7 +81,7 @@ impl<'a> TableCursor<'a> {
     ///         println!("{}: {}", String::from_utf8_lossy(column_name), value);
     ///     }
     /// }
-    /// # Ok::<(), ese_rs::EseError>(())
+    /// # Ok::<(), ese_parser::EseError>(())
     /// ```
     pub fn next_row(&mut self) -> Result<Option<IndexMap<Vec<u8>, ColumnValue>>> {
         loop {

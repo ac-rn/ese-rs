@@ -261,12 +261,9 @@ impl PyEseDatabase {
             }
         };
 
-        let hits = self.db.carve_utf16le_strings_scoped(
-            scope,
-            needle.as_deref(),
-            min_chars,
-            max_hits,
-        )?;
+        let hits =
+            self.db
+                .carve_utf16le_strings_scoped(scope, needle.as_deref(), min_chars, max_hits)?;
 
         let out = PyList::empty_bound(py);
         for h in hits {

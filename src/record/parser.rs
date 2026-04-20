@@ -211,11 +211,7 @@ impl<'a> RecordParser<'a> {
         // Calculate number of variable columns
         // If last_variable_data_type <= 127, there are no variable columns
         // But there might still be tagged columns!
-        let num_var_entries = if dd_header.last_variable_data_type > 127 {
-            dd_header.last_variable_data_type - 127
-        } else {
-            0
-        };
+        let num_var_entries = dd_header.last_variable_data_type.saturating_sub(127);
         let var_offset = dd_header.variable_size_offset as usize;
 
         let variable_data_bytes_processed = {
