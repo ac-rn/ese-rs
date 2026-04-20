@@ -51,6 +51,18 @@ pub fn decode_string(data: &[u8], codepage: u32) -> Result<String, crate::error:
     Ok(decoded.to_string())
 }
 
+/// Result of a recognized tagged-column decompression. Callers need the
+/// scheme, not just the bytes, because the scheme fixes the text encoding
+/// of the payload regardless of the column's declared code page — e.g.
+/// 7-bit ASCII output must be read as ASCII even for a UTF-16LE column.
+pub enum DecompressedTagged {
+    /// 7-bit ASCII bitstream unpacked into ASCII bytes (codepage 20127).
+    SevenBitAscii(Vec<u8>),
+    /// Uncompressed byte-wise payload (marker stripped); honors the
+    /// column's declared code page (typically 1200 / UTF-16LE).
+    Uncompressed(Vec<u8>),
+}
+
 /// Decompresses a tagged column payload using the scheme encoded in its
 /// first byte, returning `None` if the scheme is unrecognized so the caller
 /// can keep the raw bytes.
@@ -63,13 +75,15 @@ pub fn decode_string(data: &[u8], codepage: u32) -> Result<String, crate::error:
 ///
 /// Other schemes (LZXPRESS 0x20, LZXPRESS-Huffman 0x28) are not implemented;
 /// their data stays raw `Binary` until a real case surfaces.
-pub fn decompress_tagged(data: &[u8]) -> Option<Vec<u8>> {
+pub fn decompress_tagged(data: &[u8]) -> Option<DecompressedTagged> {
     if data.is_empty() {
         return None;
     }
     match data[0] & 0xf8 {
-        0x00 | 0x10 => Some(decompress_7bit_ascii(&data[1..])),
-        0x18 => Some(data[1..].to_vec()),
+        0x00 | 0x10 => Some(DecompressedTagged::SevenBitAscii(decompress_7bit_ascii(
+            &data[1..],
+        ))),
+        0x18 => Some(DecompressedTagged::Uncompressed(data[1..].to_vec())),
         _ => None,
     }
 }
@@ -129,7 +143,10 @@ mod tests {
         // Real-world sample: a CA RequestAttributes $AttributeValue for
         // RequestOSVersion on a Windows 7 / Server 2008 R2 request.
         let data = [0x15, 0x36, 0x57, 0xcc, 0x75, 0xb3, 0xc1, 0x62, 0x38, 0x38];
-        let out = decompress_tagged(&data).expect("recognized marker");
+        let out = match decompress_tagged(&data).expect("recognized marker") {
+            DecompressedTagged::SevenBitAscii(b) => b,
+            _ => panic!("expected 7-bit ASCII scheme"),
+        };
         // First 8 chars must be the version string; trailing chars depend on
         // the full 10-byte payload but '6.1.7601' is the invariant prefix.
         let s = std::str::from_utf8(&out).expect("7-bit ASCII is valid UTF-8");

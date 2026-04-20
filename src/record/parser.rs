@@ -193,16 +193,26 @@ impl<'a> RecordParser<'a> {
                 // scheme. 7-bit ASCII (marker 0x00/0x10) and uncompressed
                 // byte-wise (0x18) are handled; others stay raw until we
                 // implement LZXPRESS/Huffman.
+                use crate::utils::DecompressedTagged;
                 if let Some(decompressed) = crate::utils::decompress_tagged(&item.data) {
+                    let (bytes, effective_cp) = match decompressed {
+                        // 7-bit scheme always produces ASCII bytes regardless
+                        // of the column's declared code page — forcing cp 20127
+                        // prevents UTF-16LE columns from mojibake-decoding
+                        // "LinuxWorkstationCert" as CJK codepoints.
+                        DecompressedTagged::SevenBitAscii(b) => (b, 20127u32),
+                        DecompressedTagged::Uncompressed(b) => {
+                            (b, col_info.code_page.unwrap_or(1252))
+                        }
+                    };
                     return match col_info.column_type {
                         ColumnType::LongText | ColumnType::Text => {
-                            let cp = col_info.code_page.unwrap_or(1252);
-                            match crate::utils::decode_string(&decompressed, cp) {
+                            match crate::utils::decode_string(&bytes, effective_cp) {
                                 Ok(s) => Ok(ColumnValue::Text(s)),
-                                Err(_) => Ok(ColumnValue::Binary(decompressed)),
+                                Err(_) => Ok(ColumnValue::Binary(bytes)),
                             }
                         }
-                        _ => Ok(ColumnValue::Binary(decompressed)),
+                        _ => Ok(ColumnValue::Binary(bytes)),
                     };
                 }
                 return Ok(ColumnValue::Binary(item.data.clone()));
