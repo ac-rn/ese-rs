@@ -20,11 +20,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      # Use the rustup pre-installed on GitHub runners instead of pulling
+      # the dtolnay/rust-toolchain action, which has repeatedly 404'd
+      # during archive download and red-lit otherwise-green builds.
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust }}
-          
+        shell: bash
+        run: |
+          rustup toolchain install ${{ matrix.rust }} --profile minimal --no-self-update
+          rustup default ${{ matrix.rust }}
+          rustc --version
+
       - name: Cache cargo registry
         uses: actions/cache@v3
         with:
@@ -70,8 +75,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
           
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustc --version
+
       - name: Install maturin
         run: pip install maturin pytest
 
