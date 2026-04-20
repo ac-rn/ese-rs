@@ -189,6 +189,22 @@ impl<'a> RecordParser<'a> {
             }
 
             if item.flags & tagged_data_flags::COMPRESSED != 0 {
+                // The first byte of a compressed tagged payload selects the
+                // scheme. 7-bit ASCII (marker 0x00/0x10) and uncompressed
+                // byte-wise (0x18) are handled; others stay raw until we
+                // implement LZXPRESS/Huffman.
+                if let Some(decompressed) = crate::utils::decompress_tagged(&item.data) {
+                    return match col_info.column_type {
+                        ColumnType::LongText | ColumnType::Text => {
+                            let cp = col_info.code_page.unwrap_or(1252);
+                            match crate::utils::decode_string(&decompressed, cp) {
+                                Ok(s) => Ok(ColumnValue::Text(s)),
+                                Err(_) => Ok(ColumnValue::Binary(decompressed)),
+                            }
+                        }
+                        _ => Ok(ColumnValue::Binary(decompressed)),
+                    };
+                }
                 return Ok(ColumnValue::Binary(item.data.clone()));
             }
 
