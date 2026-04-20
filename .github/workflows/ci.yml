@@ -43,9 +43,12 @@ jobs:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
           
+      # Skip --all-features: it enables the `python` feature, which pulls
+      # in PyO3 and requires a matching Python interpreter on the runner.
+      # Python bindings are validated in the Python Tests job.
       - name: Run tests
-        run: cargo test --all-features
-        
+        run: cargo test
+
       - name: Run tests (no default features)
         run: cargo test --no-default-features
 
@@ -57,7 +60,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      # Default feature set only — the `python` feature pulls in PyO3
+      # which requires a matching Python interpreter, tested separately.
+      - run: cargo clippy --all-targets -- -D warnings
 
   fmt:
     name: Format
